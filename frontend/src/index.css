@@ -1,1 +1,83 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    background: #f1f5f9;
+  }
+
+  html.dark {
+    background: #020617;
+  }
+
+  .dark .bg-white {
+    background-color: #0f172a !important;
+  }
+
+  .dark .bg-slate-100,
+  .dark .bg-gray-100 {
+    background-color: #020617 !important;
+  }
+
+  .dark .text-slate-900,
+  .dark .text-gray-900 {
+    color: #f8fafc !important;
+  }
+
+  .dark .text-slate-700,
+  .dark .text-gray-700 {
+    color: #cbd5e1 !important;
+  }
+
+  .dark .text-slate-600,
+  .dark .text-gray-600 {
+    color: #cbd5e1 !important;
+  }
+
+  .dark .text-slate-500,
+  .dark .text-gray-500 {
+    color: #94a3b8 !important;
+  }
+
+  .dark .border-slate-200,
+  .dark .border-slate-300,
+  .dark .border-gray-200,
+  .dark .border-gray-300 {
+    border-color: #334155 !important;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-gray-50 {
+    background-color: #1e293b !important;
+  }
+
+  .dark .bg-blue-50 {
+    background-color: #172554 !important;
+  }
+
+  .dark .bg-amber-50 {
+    background-color: #451a03 !important;
+  }
+
+  .dark .bg-emerald-100 {
+    background-color: #064e3b !important;
+  }
+
+  .dark .text-blue-700 {
+    color: #93c5fd !important;
+  }
+
+  .dark .text-amber-700,
+  .dark .text-amber-900 {
+    color: #fde68a !important;
+  }
+
+  .dark .text-emerald-700 {
+    color: #6ee7b7 !important;
+  }
+
+  .dark .shadow-sm {
+    --tw-shadow-color: rgb(0 0 0 / 0.35);
+  }
+}

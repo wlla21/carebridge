@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -8,7 +11,7 @@ const Login = () => {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
 
@@ -17,13 +20,22 @@ const Login = () => {
       return;
     }
 
-    localStorage.setItem("carebridge.authenticated", "true");
-    if (remember) {
-      localStorage.setItem("carebridge.rememberedEmail", email.trim());
-    } else {
-      localStorage.removeItem("carebridge.rememberedEmail");
+    try {
+      const response = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Login failed.");
+      localStorage.setItem("carebridge.token", data.token);
+      localStorage.setItem("carebridge.role", data.role);
+      if (remember) localStorage.setItem("carebridge.rememberedEmail", email.trim());
+      else localStorage.removeItem("carebridge.rememberedEmail");
+      navigate(data.role === "doctor" || data.role === "service_worker" ? "/dashboard" : "/", { replace: true });
+    } catch (requestError) {
+      setError(requestError.message);
     }
-    navigate("/", { replace: true });
   };
 
   return (
@@ -89,6 +101,12 @@ const Login = () => {
         >
           Sign in
         </button>
+        <p className="mt-5 text-center text-sm text-gray-600">
+          Don&apos;t have an account?{" "}
+          <Link to="/register" className="font-medium text-blue-600 hover:text-blue-700">
+            Register
+          </Link>
+        </p>
       </form>
     </main>
   );
