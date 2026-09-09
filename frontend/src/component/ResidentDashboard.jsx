@@ -1,87 +1,87 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 
-const emptyCheckIn = { stress: "", sleep: "", pain: "", support: "" };
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const tone = {
+  low: "bg-emerald-100 text-emerald-800",
+  moderate: "bg-amber-100 text-amber-800",
+  high: "bg-rose-100 text-rose-800",
+};
 
 function ResidentDashboard() {
   const navigate = useNavigate();
-  const [checkIn, setCheckIn] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("carebridge.checkIn")) || emptyCheckIn;
-    } catch {
-      return emptyCheckIn;
-    }
-  });
-  const [saved, setSaved] = useState(Boolean(checkIn.stress));
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
 
-  const update = (field, value) => {
-    setCheckIn((current) => ({ ...current, [field]: value }));
-    setSaved(false);
-  };
+  useEffect(() => {
+    fetch(`${API_URL}/me/dashboard`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("carebridge.token")}` },
+    })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || "Unable to load your dashboard.");
+        return result;
+      })
+      .then(setData)
+      .catch((requestError) => setError(requestError.message));
+  }, []);
 
-  const saveCheckIn = (event) => {
-    event.preventDefault();
-    localStorage.setItem("carebridge.checkIn", JSON.stringify(checkIn));
-    setSaved(true);
-  };
+  const chartMax = useMemo(
+    () => Math.max(1, ...(data?.conversations || []).map((item) => item.wellbeing === "high" ? 3 : item.wellbeing === "moderate" ? 2 : 1)),
+    [data],
+  );
 
-  const handleLogout = () => {
-    localStorage.removeItem("carebridge.authenticated");
+  const logout = () => {
     localStorage.removeItem("carebridge.token");
     localStorage.removeItem("carebridge.role");
     navigate("/login", { replace: true });
   };
 
-  const stressTone = {
-    Low: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-    Moderate: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-    High: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
-  }[checkIn.stress] || "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
-
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="border-b bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <div>
-            <h1 className="text-xl font-bold">CareBridge</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Your private wellbeing space</p>
-          </div>
-          <div className="flex items-center gap-2"><ThemeToggle /><button onClick={handleLogout} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Log out</button></div>
+          <div><h1 className="text-xl font-bold">CareBridge</h1><p className="text-xs text-slate-500">Your private wellbeing space</p></div>
+          <div className="flex items-center gap-2"><ThemeToggle /><button onClick={logout} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">Log out</button></div>
         </div>
       </header>
-
-      <main className="mx-auto max-w-5xl px-5 py-8">
-        <section className="rounded-3xl bg-gradient-to-r from-blue-700 to-cyan-500 p-6 text-white shadow-lg dark:from-slate-800 dark:to-blue-950">
-          <p className="text-sm font-semibold text-blue-100">Personal check-in</p>
-          <h2 className="mt-2 text-3xl font-bold">How are you feeling today?</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">Track how you are feeling and talk privately with CareBridge AI when you need support.</p>
-          <button onClick={() => navigate("/")} className="mt-5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50">Talk to CareBridge AI</button>
-        </section>
-
-        <div className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <form onSubmit={saveCheckIn} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold">Wellbeing check-in</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your answers stay in your account for this prototype.</p></div>{saved && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">Saved</span>}</div>
-            <label className="mt-5 block text-sm font-semibold">Stress level</label>
-            <div className="mt-2 grid grid-cols-3 gap-2">{["Low", "Moderate", "High"].map((value) => <button key={value} type="button" onClick={() => update("stress", value)} className={`rounded-xl border px-3 py-3 text-sm font-medium ${checkIn.stress === value ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200" : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}>{value}</button>)}</div>
-            <label htmlFor="sleep" className="mt-5 block text-sm font-semibold">How has your sleep been?</label>
-            <select id="sleep" value={checkIn.sleep} onChange={(event) => update("sleep", event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-900"><option value="">Select one</option><option>Sleeping well</option><option>Some difficulty</option><option>Very difficult</option></select>
-            <label htmlFor="pain" className="mt-5 block text-sm font-semibold">Any physical discomfort?</label>
-            <select id="pain" value={checkIn.pain} onChange={(event) => update("pain", event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-900"><option value="">Select one</option><option>None</option><option>Mild</option><option>Significant</option></select>
-            <label htmlFor="support" className="mt-5 block text-sm font-semibold">What would help most right now?</label>
-            <textarea id="support" value={checkIn.support} onChange={(event) => update("support", event.target.value)} rows={3} placeholder="You can describe what you are going through..." className="mt-2 w-full rounded-xl border border-slate-300 bg-transparent px-3 py-3 text-sm dark:border-slate-700" />
-            <button type="submit" disabled={!checkIn.stress} className="mt-5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">Save check-in</button>
-          </form>
-
-          <aside className="space-y-5">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h3 className="font-bold">Your latest wellbeing</h3>
-              <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-4 dark:bg-slate-800"><span className="text-sm text-slate-600 dark:text-slate-300">Stress level</span><span className={`rounded-full px-3 py-1 text-xs font-bold ${stressTone}`}>{checkIn.stress || "Not checked in"}</span></div>
-              <div className="mt-3 grid gap-3 text-sm"><p className="flex justify-between"><span className="text-slate-500">Sleep</span><strong>{checkIn.sleep || "Not recorded"}</strong></p><p className="flex justify-between"><span className="text-slate-500">Physical discomfort</span><strong>{checkIn.pain || "Not recorded"}</strong></p></div>
-            </div>
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950"><h3 className="font-bold text-blue-900 dark:text-blue-100">You are not alone</h3><p className="mt-2 text-sm leading-6 text-blue-800 dark:text-blue-200">CareBridge can help you describe what is happening and explore possible next steps. This is not a diagnosis or emergency service.</p><button onClick={() => navigate("/")} className="mt-4 font-semibold text-blue-700 hover:underline dark:text-blue-200">Start a private conversation →</button></div>
-          </aside>
-        </div>
+      <main className="mx-auto max-w-6xl space-y-6 px-5 py-8">
+        {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
+        {!data && !error && <div className="rounded-2xl bg-white p-8 text-slate-500">Loading your wellbeing overview...</div>}
+        {data && (
+          <>
+            <section className="rounded-3xl bg-gradient-to-r from-blue-700 to-cyan-500 p-7 text-white shadow-lg">
+              <p className="text-sm text-blue-100">Welcome back, {data.username}</p>
+              <h2 className="mt-2 text-3xl font-bold">Your wellbeing overview</h2>
+              <p className="mt-2 max-w-2xl text-sm text-blue-100">Supportive insights from your conversations - not a medical diagnosis.</p>
+            </section>
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Current wellbeing", data.wellbeing_status],
+                ["Recent trend", data.trend],
+                ["Conversations", data.total_conversations],
+                ["Recent activity", data.recent_activity ? new Date(data.recent_activity).toLocaleDateString() : "None yet"],
+              ].map(([label, value]) => <div key={label} className="rounded-2xl bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{label}</p><p className={`mt-2 text-2xl font-bold capitalize ${label === "Current wellbeing" ? `rounded-full px-3 py-1 text-base inline-block ${tone[value] || "bg-slate-100 text-slate-700"}` : ""}`}>{value}</p></div>)}
+            </section>
+            <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-2xl bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between"><h3 className="text-lg font-bold">Wellbeing trend</h3><span className="text-xs text-slate-500">Informational</span></div>
+                <div className="mt-6 flex h-40 items-end gap-3 border-b border-l border-slate-200 px-3">
+                  {data.conversations.length ? data.conversations.slice().reverse().map((item) => {
+                    const score = item.wellbeing === "high" ? 3 : item.wellbeing === "moderate" ? 2 : 1;
+                    return <div key={item.id} className="flex flex-1 flex-col items-center gap-2"><div title={`${item.wellbeing} wellbeing`} className="w-full max-w-12 rounded-t-lg bg-blue-500" style={{ height: `${(score / chartMax) * 100}%` }} /><span className="text-[10px] text-slate-500">{new Date(item.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}</span></div>;
+                  }) : <p className="mb-5 text-sm text-slate-500">Start a conversation to build your trend.</p>}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white p-6 shadow-sm"><h3 className="text-lg font-bold">Your Recent Wellbeing Summary</h3><p className="mt-3 leading-7 text-slate-600">{data.summary}</p><div className="mt-5 rounded-xl bg-blue-50 p-4 text-sm text-blue-800">These insights are supportive and informational, not clinical advice.</div></div>
+            </section>
+            <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+              <div className="rounded-2xl bg-white p-6 shadow-sm"><h3 className="text-lg font-bold">Personalized Suggestions</h3><ul className="mt-4 space-y-3">{(data.suggestions.length ? data.suggestions : ["Continue checking in when you need support."]).map((suggestion) => <li key={suggestion} className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">• {suggestion}</li>)}</ul><button onClick={() => navigate("/")} className="mt-5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700">Start a conversation</button></div>
+              <div className="rounded-2xl bg-white p-6 shadow-sm"><h3 className="text-lg font-bold">Conversation History</h3><div className="mt-4 space-y-3">{data.conversations.length ? data.conversations.map((conversation) => <div key={conversation.id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="font-semibold">{conversation.title}</h4><p className="mt-1 text-xs text-slate-500">{new Date(conversation.created_at).toLocaleString()} · {conversation.topic}</p></div><span className={`rounded-full px-2 py-1 text-xs font-medium ${tone[conversation.wellbeing] || "bg-slate-100 text-slate-700"}`}>{conversation.wellbeing}</span></div><p className="mt-3 text-sm leading-6 text-slate-600">{conversation.summary}</p></div>) : <p className="text-sm text-slate-500">No conversations yet.</p>}</div></div>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

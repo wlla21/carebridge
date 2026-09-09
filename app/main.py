@@ -47,6 +47,17 @@ with engine.begin() as connection:
         connection.execute(text("ALTER TABLE ai_analyses ADD COLUMN support_type VARCHAR(100) NULL"))
     if "recommended_next_steps" not in analysis_columns:
         connection.execute(text("ALTER TABLE ai_analyses ADD COLUMN recommended_next_steps TEXT NULL"))
+    for column, definition in {
+        "conversation_title": "VARCHAR(160) NULL",
+        "wellbeing_level": "VARCHAR(20) NULL",
+        "trend": "VARCHAR(20) NULL",
+        "topic": "VARCHAR(100) NULL",
+        "positive_progress": "TEXT NULL",
+        "attention_area": "TEXT NULL",
+        "suggestions": "TEXT NULL",
+    }.items():
+        if column not in analysis_columns:
+            connection.execute(text(f"ALTER TABLE ai_analyses ADD COLUMN {column} {definition}"))
 
 groq_api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=groq_api_key) if groq_api_key else None
@@ -152,6 +163,27 @@ class AnalysisResponse(BaseModel):
     created_at: str
 
 
+class UserDashboardResponse(BaseModel):
+    username: str
+    total_conversations: int
+    recent_activity: str | None
+    wellbeing_status: str
+    trend: str
+    summary: str
+    suggestions: list[str]
+    conversations: list[dict]
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    username: str
+    status: str
+    conversations: int
+    wellbeing_status: str
+    trend: str
+    last_active: str | None
+
+
 @app.get("/")
 def home():
     return {"message": "API is working!"}
@@ -217,8 +249,11 @@ def ask_ai(request: PromptRequest, user: User = Depends(current_user)):
                 "content": (
                     "You are a healthcare support assistant. Analyze the user's message "
                     "without diagnosing. Return JSON with exactly these string fields: "
-                    "user_answer, situation_summary, urgency, support_type, "
-                    "recommended_next_steps. The situation_summary must be anonymous and "
+                    "user_answer, conversation_title, situation_summary, urgency, support_type, "
+                    "recommended_next_steps, wellbeing_level, trend, topic, positive_progress, "
+                    "attention_area, suggestions. wellbeing_level must be low, moderate, or high; "
+                    "trend must be improving, stable, or increasing; suggestions must be a JSON "
+                    "array of 2-3 short strings. The situation_summary must be anonymous and "
                     "general: never include names, contact details, exact quotations, or "
                     "identifying details. urgency must be one of low, medium, high, or "
                     "emergency. Keep the user_answer supportive and clear."
@@ -233,14 +268,25 @@ def ask_ai(request: PromptRequest, user: User = Depends(current_user)):
     try:
         result = json.loads(raw_answer)
         answer = result["user_answer"]
+        conversation_title = result["conversation_title"]
         situation_summary = result["situation_summary"]
         urgency = result["urgency"].lower()
         support_type = result["support_type"]
         recommended_next_steps = result["recommended_next_steps"]
+        wellbeing_level = result["wellbeing_level"].lower()
+        trend = result["trend"].lower()
+        topic = result["topic"]
+        positive_progress = result["positive_progress"]
+        attention_area = result["attention_area"]
+        suggestions = result["suggestions"]
     except (KeyError, TypeError, ValueError):
         raise HTTPException(status_code=502, detail="The AI returned an invalid analysis.")
     if urgency not in {"low", "medium", "high", "emergency"}:
         raise HTTPException(status_code=502, detail="The AI returned an invalid urgency.")
+    if wellbeing_level not in {"low", "moderate", "high"} or trend not in {"improving", "stable", "increasing"}:
+        raise HTTPException(status_code=502, detail="The AI returned invalid wellbeing data.")
+    if not isinstance(suggestions, list) or not all(isinstance(item, str) for item in suggestions):
+        raise HTTPException(status_code=502, detail="The AI returned invalid suggestions.")
 
     analysis = AIAnalysis(
         user_id=user.id,
@@ -248,6 +294,13 @@ def ask_ai(request: PromptRequest, user: User = Depends(current_user)):
         urgency=urgency,
         support_type=support_type,
         recommended_next_steps=recommended_next_steps,
+        conversation_title=conversation_title,
+        wellbeing_level=wellbeing_level,
+        trend=trend,
+        topic=topic,
+        positive_progress=positive_progress,
+        attention_area=attention_area,
+        suggestions=json.dumps(suggestions[:3]),
     )
     db = SessionLocal()
     try:
@@ -287,5 +340,101 @@ def list_analyses(user: User = Depends(staff_user)):
             )
             for analysis in analyses
         ]
+    finally:
+        db.close()
+
+
+def analysis_payload(analysis: AIAnalysis) -> dict:
+    return {
+        "id": analysis.id,
+        "title": analysis.conversation_title or "Wellbeing conversation",
+        "summary": analysis.situation_summary,
+        "wellbeing": analysis.wellbeing_level or "moderate",
+        "trend": analysis.trend or "stable",
+        "topic": analysis.topic or "General wellbeing",
+        "positive_progress": analysis.positive_progress or "No progress noted yet.",
+        "attention_area": analysis.attention_area or "No specific area flagged.",
+        "suggestions": json.loads(analysis.suggestions or "[]"),
+        "created_at": analysis.created_at.isoformat(),
+    }
+
+
+@app.get("/me/dashboard", response_model=UserDashboardResponse)
+def user_dashboard(user: User = Depends(current_user)):
+    db = SessionLocal()
+    try:
+        analyses = (
+            db.query(AIAnalysis)
+            .filter(AIAnalysis.user_id == user.id, AIAnalysis.situation_summary.is_not(None))
+            .order_by(AIAnalysis.created_at.desc())
+            .all()
+        )
+        latest = analyses[0] if analyses else None
+        suggestions = []
+        for analysis in analyses:
+            suggestions.extend(json.loads(analysis.suggestions or "[]"))
+        return UserDashboardResponse(
+            username=user.username,
+            total_conversations=len(analyses),
+            recent_activity=latest.created_at.isoformat() if latest else None,
+            wellbeing_status=latest.wellbeing_level if latest else "Not enough data",
+            trend=latest.trend if latest else "stable",
+            summary=(
+                f"Recent conversations mainly relate to {latest.topic.lower()}. "
+                f"{latest.positive_progress or ''} {latest.attention_area or ''}"
+                if latest else "Start a conversation to receive a supportive wellbeing summary."
+            ),
+            suggestions=list(dict.fromkeys(suggestions))[:5],
+            conversations=[analysis_payload(analysis) for analysis in analyses],
+        )
+    finally:
+        db.close()
+
+
+@app.get("/admin/users", response_model=list[AdminUserResponse])
+def admin_users(user: User = Depends(staff_user)):
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter(User.role == "user").order_by(User.created_at.desc()).all()
+        result = []
+        for account in users:
+            analyses = (
+                db.query(AIAnalysis)
+                .filter(AIAnalysis.user_id == account.id, AIAnalysis.situation_summary.is_not(None))
+                .order_by(AIAnalysis.created_at.desc())
+                .all()
+            )
+            latest = analyses[0] if analyses else None
+            result.append(AdminUserResponse(
+                id=account.id,
+                username=account.username,
+                status="Active" if latest else "New",
+                conversations=len(analyses),
+                wellbeing_status=latest.wellbeing_level if latest else "Not enough data",
+                trend=latest.trend if latest else "stable",
+                last_active=latest.created_at.isoformat() if latest else None,
+            ))
+        return result
+    finally:
+        db.close()
+
+
+@app.get("/admin/users/{user_id}/dashboard")
+def admin_user_dashboard(user_id: int, user: User = Depends(staff_user)):
+    db = SessionLocal()
+    try:
+        analyses = (
+            db.query(AIAnalysis)
+            .filter(AIAnalysis.user_id == user_id, AIAnalysis.situation_summary.is_not(None))
+            .order_by(AIAnalysis.created_at.asc())
+            .all()
+        )
+        return {
+            "conversations": [analysis_payload(analysis) for analysis in analyses],
+            "summary": (
+                f"General themes include {analyses[-1].topic.lower()}."
+                if analyses else "No privacy-safe wellbeing data is available."
+            ),
+        }
     finally:
         db.close()
