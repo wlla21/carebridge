@@ -2,5 +2,6 @@ fastapi
 uvicorn[standard]
 groq
 python-dotenv
+psycopg2-binary
 sqlalchemy
 pymysql
