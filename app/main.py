@@ -75,7 +75,7 @@ app.add_middleware(
         origin.strip()
         for origin in os.getenv(
             "FRONTEND_URLS",
-            "http://localhost:5173,http://127.0.0.1:5173",
+            "http://localhost:5173,http://127.0.0.1:5173,https://carebridge-irih.vercel.app",
         ).split(",")
         if origin.strip()
     ],
