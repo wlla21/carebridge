@@ -73,27 +73,32 @@ function Chat() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">CareBridge</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+      <header className="sticky top-0 z-20 border-b border-gray-200/80 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-400 text-lg font-bold text-white shadow-sm">+</div>
+            <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold text-gray-900 dark:text-white sm:text-2xl">CareBridge</h1>
+            <p className="hidden text-sm text-gray-500 dark:text-slate-400 sm:block">
               Private healthcare support
             </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => navigate("/dashboard")}
-              className="rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 sm:px-3 sm:text-sm"
             >
-              {isStaff ? "Worker dashboard" : "My wellbeing"}
+              <span className="sm:hidden">Dashboard</span>
+              <span className="hidden sm:inline">{isStaff ? "Worker dashboard" : "My wellbeing"}</span>
             </button>
             <ThemeToggle />
             <button
               onClick={handleLogout}
-              className="rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 sm:px-3 sm:text-sm"
             >
-              Log out
+              <span className="sm:hidden">Exit</span>
+              <span className="hidden sm:inline">Log out</span>
             </button>
           </div>
         </div>
