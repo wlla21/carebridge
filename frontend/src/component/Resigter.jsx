@@ -56,7 +56,7 @@ function Register() {
     <main className="flex min-h-screen items-center justify-center bg-gray-100 px-6">
       <form className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm" onSubmit={handleSubmit}>
         <h1 className="mb-2 text-3xl font-bold text-gray-900">Create account</h1>
-        <p className="mb-6 text-gray-600">Register as a CareBridge user.</p>
+        <p className="mb-6 text-gray-600">Register as a wecare.sg user.</p>
         {["username", "email", "age", "password", "confirmPassword"].map((field) => (
           <input
             key={field}

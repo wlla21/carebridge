@@ -61,7 +61,7 @@ const Login = () => {
         onSubmit={handleSubmit}
       >
         <h1 className="mb-2 text-3xl font-bold text-gray-900">Welcome back</h1>
-        <p className="mb-6 text-gray-600">Sign in to use CareBridge.</p>
+        <p className="mb-6 text-gray-600">Sign in to use wecare.sg.</p>
         <div className="mb-5">
           <label
             htmlFor="email"

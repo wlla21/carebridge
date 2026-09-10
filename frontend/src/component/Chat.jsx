@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
+import logo from "../assets/logo.png";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -76,11 +77,11 @@ function Chat() {
       <header className="sticky top-0 z-20 border-b border-gray-200/80 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-5">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-400 text-lg font-bold text-white shadow-sm">+</div>
+            <img src={logo} alt="Wecare.sg logo" className="h-10 w-10 shrink-0 rounded-2xl object-contain shadow-sm" />
             <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-gray-900 dark:text-white sm:text-2xl">CareBridge</h1>
+            <h1 className="truncate text-lg font-bold text-gray-900 dark:text-white sm:text-2xl">wecare.sg</h1>
             <p className="hidden text-sm text-gray-500 dark:text-slate-400 sm:block">
-              Private healthcare support
+              Private wellbeing support
             </p>
             </div>
           </div>
@@ -171,7 +172,7 @@ function Chat() {
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleComposerKeyDown}
-              placeholder="Message CareBridge..."
+              placeholder="Message wecare.sg..."
               rows={1}
               disabled={loading}
               className="max-h-32 min-h-12 w-full resize-none rounded-xl bg-transparent px-3 py-3 text-gray-900 outline-none placeholder-gray-400 disabled:bg-gray-50 dark:text-slate-100 dark:placeholder-slate-500 dark:disabled:bg-slate-800"
