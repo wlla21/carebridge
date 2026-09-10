@@ -12,6 +12,9 @@ function Dashboard() {
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [chatPrompt, setChatPrompt] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${localStorage.getItem("carebridge.token")}` }), []);
   const loadUsers = useCallback(() => fetch(`${API_URL}/admin/users`, { headers }).then(async (response) => {
@@ -23,6 +26,8 @@ function Dashboard() {
   useEffect(() => { loadUsers(); }, [loadUsers]);
   useEffect(() => {
     if (!selected) return;
+    setChatMessages([]);
+    setChatPrompt("");
     fetch(`${API_URL}/admin/users/${selected.id}/dashboard`, { headers })
       .then(async (response) => {
         const data = await response.json();
@@ -31,6 +36,39 @@ function Dashboard() {
       })
       .catch((requestError) => setError(requestError.message));
   }, [selected, headers]);
+
+  const askAboutProfile = async () => {
+    const prompt = chatPrompt.trim();
+    if (!prompt || chatLoading || !detail) return;
+    const context = detail.latest
+      ? `Selected resident wellbeing context: wellbeing ${detail.latest.wellbeing}, trend ${detail.latest.trend}, urgency ${detail.latest.urgency}, support type ${detail.latest.support_type}, attention area ${detail.latest.attention_area}.`
+      : "The selected resident has no wellbeing analysis yet.";
+    setChatPrompt("");
+    setChatMessages((messages) => [...messages, { role: "user", content: prompt }]);
+    setChatLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/ask`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: `${context}\nStaff question: ${prompt}` }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Unable to get guidance.");
+      setChatMessages((messages) => [...messages, { role: "assistant", content: data.answer }]);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleChatKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      askAboutProfile();
+    }
+  };
 
   const filteredUsers = useMemo(() => users.filter((user) => user.username.toLowerCase().includes(search.toLowerCase())), [users, search]);
   const logout = () => {
@@ -48,7 +86,7 @@ function Dashboard() {
         <section className="grid gap-4 sm:grid-cols-3">{[["Registered users", users.length], ["Active users", users.filter((user) => user.status === "Active").length], ["Conversations reviewed", users.reduce((total, user) => total + user.conversations, 0)]].map(([label, value]) => <div key={label} className="rounded-2xl bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold">{value}</p></div>)}</section>
         <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           <div className="rounded-2xl bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><h3 className="font-bold">User overview</h3><button onClick={loadUsers} className="text-sm font-semibold text-blue-600">Refresh</button></div><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search username" className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" /><div className="mt-4 space-y-2">{filteredUsers.length ? filteredUsers.map((user) => <button key={user.id} onClick={() => setSelected(user)} className={`w-full rounded-xl border p-4 text-left ${selected?.id === user.id ? "border-blue-400 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}><div className="flex justify-between gap-3"><span className="font-semibold">{user.username}</span><span className="text-xs capitalize text-slate-500">{user.wellbeing_status}</span></div><p className="mt-1 text-xs text-slate-500">{user.conversations} conversations · {user.trend} trend</p></button>) : <p className="py-6 text-sm text-slate-500">No users with wellbeing data yet.</p>}</div></div>
-          <div className="rounded-2xl bg-white p-6 shadow-sm">{selected && detail ? <><div className="flex items-start justify-between"><div><h3 className="text-2xl font-bold">{selected.username}</h3><p className="mt-1 text-sm text-slate-500">Privacy-safe user overview</p></div><span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold capitalize text-blue-800">{selected.wellbeing_status}</span></div><div className="mt-6 rounded-xl bg-slate-50 p-4"><p className="text-sm leading-6 text-slate-700">{detail.summary}</p></div><h4 className="mt-6 font-bold">Wellbeing timeline</h4><div className="mt-4 space-y-3">{detail.conversations.length ? detail.conversations.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="h-3 w-3 rounded-full bg-blue-500" /><div className="flex-1"><p className="font-medium">{item.topic}</p><p className="text-xs text-slate-500">{item.wellbeing} wellbeing · {item.trend} trend · {new Date(item.created_at).toLocaleDateString()}</p></div></div>) : <p className="text-sm text-slate-500">No privacy-safe conversations recorded.</p>}</div></> : <div className="flex h-full min-h-64 items-center justify-center text-center text-slate-500"><p>Select a user to view aggregated wellbeing trends.</p></div>}</div>
+          <div className="rounded-2xl bg-white p-6 shadow-sm">{selected && detail ? <><div className="flex items-start justify-between"><div><h3 className="text-2xl font-bold">{selected.username}</h3><p className="mt-1 text-sm text-slate-500">Privacy-safe user overview</p></div><span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold capitalize text-blue-800">{selected.wellbeing_status}</span></div><div className="mt-6 rounded-xl bg-slate-50 p-4"><p className="text-sm leading-6 text-slate-700">{detail.summary}</p></div><h4 className="mt-6 font-bold">Wellbeing details</h4>{detail.latest && <div className="mt-3 grid gap-3 sm:grid-cols-2">{[["Stress / wellbeing", detail.latest.wellbeing], ["Trend", detail.latest.trend], ["Urgency", detail.latest.urgency], ["Support type", detail.latest.support_type], ["Attention area", detail.latest.attention_area], ["Next steps", detail.latest.next_steps]].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-sm capitalize text-slate-700">{value}</p></div>)}</div>}<h4 className="mt-6 font-bold">Wellbeing timeline</h4><div className="mt-4 space-y-3">{detail.conversations.length ? detail.conversations.map((item) => <div key={item.id} className="rounded-xl border border-slate-200 p-3"><div className="flex items-center gap-3"><div className="h-3 w-3 shrink-0 rounded-full bg-blue-500" /><div className="flex-1"><p className="font-medium">{item.topic}</p><p className="text-xs capitalize text-slate-500">{item.wellbeing} wellbeing · {item.trend} trend · {item.urgency} urgency · {new Date(item.created_at).toLocaleDateString()}</p></div></div><p className="mt-2 text-sm text-slate-600">{item.summary}</p><p className="mt-2 text-xs text-slate-500">Suggested support: {item.support_type}. {item.next_steps}</p></div>) : <p className="text-sm text-slate-500">No privacy-safe conversations recorded.</p>}</div><h4 className="mt-6 font-bold">Ask about this profile</h4><div className="mt-3 space-y-2">{chatMessages.map((message, index) => <div key={`${message.role}-${index}`} className={`rounded-xl p-3 text-sm whitespace-pre-wrap ${message.role === "user" ? "ml-8 bg-blue-50 text-blue-900" : "mr-8 bg-slate-50 text-slate-700"}`}>{message.content}</div>)}{chatLoading && <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Thinking...</div>}</div><div className="mt-3 flex gap-2"><textarea value={chatPrompt} onChange={(event) => setChatPrompt(event.target.value)} onKeyDown={handleChatKeyDown} rows={2} placeholder="Ask for support guidance..." disabled={chatLoading} className="min-h-12 flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm" /><button onClick={askAboutProfile} disabled={chatLoading || !chatPrompt.trim()} className="self-end rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300">Ask</button></div><p className="mt-2 text-xs text-slate-400">AI guidance is based on aggregated data and is not a diagnosis.</p></> : <div className="flex h-full min-h-64 items-center justify-center text-center text-slate-500"><p>Select a user to view aggregated wellbeing trends.</p></div>}</div>
         </section>
       </main>
     </div>

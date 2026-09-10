@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const demoUsers = [
+  { label: "Admin dashboard", email: "demo-admin@example.com", password: "Demo12345!" },
   { label: "Income support", email: "demo-income@example.com", password: "Demo12345!" },
   { label: "Caregiver stress", email: "demo-caregiver@example.com", password: "Demo12345!" },
   { label: "Student wellbeing", email: "demo-student@example.com", password: "Demo12345!" },
@@ -119,7 +120,7 @@ const Login = () => {
         </button>
         <div className="mt-6 border-t border-gray-200 pt-5 dark:border-slate-700">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-            Try a demo resident
+            Try a demo account
           </p>
           <div className="mt-3 grid gap-2">
             {demoUsers.map((demoUser) => (

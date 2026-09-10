@@ -103,10 +103,18 @@ class LoginRequest(BaseModel):
 
 DEMO_USERS = [
     {
+        "username": "Demo Admin",
+        "email": "demo-admin@example.com",
+        "password": "Demo12345!",
+        "age": None,
+        "role": "admin",
+    },
+    {
         "username": "Demo Income Support",
         "email": "demo-income@example.com",
         "password": "Demo12345!",
         "age": 42,
+        "role": "user",
         "topic": "Income and employment",
         "title": "Worry about income after job loss",
         "summary": "The resident reported losing work recently and feeling worried about meeting household expenses.",
@@ -123,6 +131,7 @@ DEMO_USERS = [
         "email": "demo-caregiver@example.com",
         "password": "Demo12345!",
         "age": 56,
+        "role": "user",
         "topic": "Caregiving",
         "title": "Feeling overwhelmed by caregiving",
         "summary": "The resident described feeling tired while caring for an elderly family member and managing daily responsibilities.",
@@ -139,6 +148,7 @@ DEMO_USERS = [
         "email": "demo-student@example.com",
         "password": "Demo12345!",
         "age": 19,
+        "role": "user",
         "topic": "Education and wellbeing",
         "title": "Pressure from studies",
         "summary": "The resident reported study pressure, difficulty concentrating, and concern about keeping up with schoolwork.",
@@ -181,16 +191,19 @@ def seed_demo_users() -> None:
                     email=demo["email"],
                     age=demo["age"],
                     password_hash=hash_password(demo["password"]),
-                    role="user",
+                    role=demo["role"],
                 )
                 db.add(user)
                 db.flush()
             else:
                 user.username = demo["username"]
                 user.age = demo["age"]
-                user.role = "user"
+                user.role = demo["role"]
                 user.password_hash = hash_password(demo["password"])
-            if db.query(AIAnalysis).filter(AIAnalysis.user_id == user.id).count() == 0:
+            if (
+                demo["role"] == "user"
+                and db.query(AIAnalysis).filter(AIAnalysis.user_id == user.id).count() == 0
+            ):
                 db.add(
                     AIAnalysis(
                         user_id=user.id,
@@ -457,6 +470,9 @@ def analysis_payload(analysis: AIAnalysis) -> dict:
         "id": analysis.id,
         "title": analysis.conversation_title or "Wellbeing conversation",
         "summary": analysis.situation_summary,
+        "urgency": analysis.urgency or "medium",
+        "support_type": analysis.support_type or "General wellbeing support",
+        "next_steps": analysis.recommended_next_steps or "No next steps recorded.",
         "wellbeing": analysis.wellbeing_level or "moderate",
         "trend": analysis.trend or "stable",
         "topic": analysis.topic or "General wellbeing",
@@ -540,6 +556,7 @@ def admin_user_dashboard(user_id: int, user: User = Depends(staff_user)):
         )
         return {
             "conversations": [analysis_payload(analysis) for analysis in analyses],
+            "latest": analysis_payload(analyses[-1]) if analyses else None,
             "summary": (
                 f"General themes include {analyses[-1].topic.lower()}."
                 if analyses else "No privacy-safe wellbeing data is available."
