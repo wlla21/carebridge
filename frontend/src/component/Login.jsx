@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const demoUsers = [
+  { label: "Income support", email: "demo-income@example.com", password: "Demo12345!" },
+  { label: "Caregiver stress", email: "demo-caregiver@example.com", password: "Demo12345!" },
+  { label: "Student wellbeing", email: "demo-student@example.com", password: "Demo12345!" },
+];
 
 const Login = () => {
   const navigate = useNavigate();
@@ -32,10 +37,21 @@ const Login = () => {
       localStorage.setItem("carebridge.role", data.role);
       if (remember) localStorage.setItem("carebridge.rememberedEmail", email.trim());
       else localStorage.removeItem("carebridge.rememberedEmail");
-      navigate(data.role === "doctor" || data.role === "service_worker" ? "/dashboard" : "/", { replace: true });
+      navigate(
+        ["doctor", "service_worker", "admin"].includes(data.role)
+          ? "/dashboard"
+          : "/",
+        { replace: true },
+      );
     } catch (requestError) {
       setError(requestError.message);
     }
+  };
+
+  const selectDemoUser = (demoUser) => {
+    setEmail(demoUser.email);
+    setPassword(demoUser.password);
+    setError("");
   };
 
   return (
@@ -101,6 +117,23 @@ const Login = () => {
         >
           Sign in
         </button>
+        <div className="mt-6 border-t border-gray-200 pt-5 dark:border-slate-700">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+            Try a demo resident
+          </p>
+          <div className="mt-3 grid gap-2">
+            {demoUsers.map((demoUser) => (
+              <button
+                key={demoUser.email}
+                type="button"
+                onClick={() => selectDemoUser(demoUser)}
+                className="rounded-lg border border-blue-200 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-200 dark:hover:bg-blue-950"
+              >
+                {demoUser.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <p className="mt-5 text-center text-sm text-gray-600">
           Don&apos;t have an account?{" "}
           <Link to="/register" className="font-medium text-blue-600 hover:text-blue-700">

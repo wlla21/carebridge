@@ -33,12 +33,19 @@ analysis_columns = {
     column["name"] for column in inspect(engine).get_columns("ai_analyses")
 }
 with engine.begin() as connection:
+    database_dialect = engine.dialect.name
     if "user_id" not in analysis_columns:
         connection.execute(text("ALTER TABLE ai_analyses ADD COLUMN user_id INTEGER NULL"))
-    if "prompt" in analysis_columns:
-        connection.execute(text("ALTER TABLE ai_analyses MODIFY COLUMN prompt TEXT NULL"))
-    if "answer" in analysis_columns:
-        connection.execute(text("ALTER TABLE ai_analyses MODIFY COLUMN answer TEXT NULL"))
+    if database_dialect == "mysql":
+        if "prompt" in analysis_columns:
+            connection.execute(text("ALTER TABLE ai_analyses MODIFY COLUMN prompt TEXT NULL"))
+        if "answer" in analysis_columns:
+            connection.execute(text("ALTER TABLE ai_analyses MODIFY COLUMN answer TEXT NULL"))
+    elif database_dialect == "postgresql":
+        if "prompt" in analysis_columns:
+            connection.execute(text("ALTER TABLE ai_analyses ALTER COLUMN prompt DROP NOT NULL"))
+        if "answer" in analysis_columns:
+            connection.execute(text("ALTER TABLE ai_analyses ALTER COLUMN answer DROP NOT NULL"))
     if "situation_summary" not in analysis_columns:
         connection.execute(text("ALTER TABLE ai_analyses ADD COLUMN situation_summary TEXT NULL"))
     if "urgency" not in analysis_columns:
@@ -94,6 +101,58 @@ class LoginRequest(BaseModel):
     password: str
 
 
+DEMO_USERS = [
+    {
+        "username": "Demo Income Support",
+        "email": "demo-income@example.com",
+        "password": "Demo12345!",
+        "age": 42,
+        "topic": "Income and employment",
+        "title": "Worry about income after job loss",
+        "summary": "The resident reported losing work recently and feeling worried about meeting household expenses.",
+        "wellbeing": "moderate",
+        "trend": "stable",
+        "support_type": "Income and employment support",
+        "next_steps": "Explore employment and financial support options with a support worker.",
+        "positive_progress": "Reached out for support and is considering next steps.",
+        "attention_area": "Financial pressure and uncertainty about employment.",
+        "suggestions": '["Explore local employment support", "Discuss essential expenses with a trusted support person"]',
+    },
+    {
+        "username": "Demo Caregiver Support",
+        "email": "demo-caregiver@example.com",
+        "password": "Demo12345!",
+        "age": 56,
+        "topic": "Caregiving",
+        "title": "Feeling overwhelmed by caregiving",
+        "summary": "The resident described feeling tired while caring for an elderly family member and managing daily responsibilities.",
+        "wellbeing": "high",
+        "trend": "increasing",
+        "support_type": "Caregiver and family support",
+        "next_steps": "Consider caregiver support services and schedule time for personal rest.",
+        "positive_progress": "Recognised the need for support instead of managing alone.",
+        "attention_area": "Stress, fatigue, and limited time for self-care.",
+        "suggestions": '["Ask about respite or caregiver support", "Share responsibilities with family where possible"]',
+    },
+    {
+        "username": "Demo Student Wellbeing",
+        "email": "demo-student@example.com",
+        "password": "Demo12345!",
+        "age": 19,
+        "topic": "Education and wellbeing",
+        "title": "Pressure from studies",
+        "summary": "The resident reported study pressure, difficulty concentrating, and concern about keeping up with schoolwork.",
+        "wellbeing": "moderate",
+        "trend": "improving",
+        "support_type": "Student and wellbeing support",
+        "next_steps": "Talk with a school support professional and create a manageable study plan.",
+        "positive_progress": "Started identifying specific pressures and asking for help.",
+        "attention_area": "Concentration difficulties and study-related stress.",
+        "suggestions": '["Speak with a school counsellor", "Break school tasks into smaller steps"]',
+    },
+]
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
@@ -109,6 +168,53 @@ def verify_password(password: str, encoded: str) -> bool:
         return hmac.compare_digest(actual, expected)
     except (ValueError, TypeError):
         return False
+
+
+def seed_demo_users() -> None:
+    db = SessionLocal()
+    try:
+        for demo in DEMO_USERS:
+            user = db.query(User).filter(User.email == demo["email"]).first()
+            if user is None:
+                user = User(
+                    username=demo["username"],
+                    email=demo["email"],
+                    age=demo["age"],
+                    password_hash=hash_password(demo["password"]),
+                    role="user",
+                )
+                db.add(user)
+                db.flush()
+            else:
+                user.username = demo["username"]
+                user.age = demo["age"]
+                user.role = "user"
+                user.password_hash = hash_password(demo["password"])
+            if db.query(AIAnalysis).filter(AIAnalysis.user_id == user.id).count() == 0:
+                db.add(
+                    AIAnalysis(
+                        user_id=user.id,
+                        prompt=demo["summary"],
+                        answer=demo["summary"],
+                        conversation_title=demo["title"],
+                        situation_summary=demo["summary"],
+                        urgency="medium",
+                        support_type=demo["support_type"],
+                        recommended_next_steps=demo["next_steps"],
+                        wellbeing_level=demo["wellbeing"],
+                        trend=demo["trend"],
+                        topic=demo["topic"],
+                        positive_progress=demo["positive_progress"],
+                        attention_area=demo["attention_area"],
+                        suggestions=demo["suggestions"],
+                    )
+                )
+        db.commit()
+    finally:
+        db.close()
+
+
+seed_demo_users()
 
 
 def get_auth_secret() -> str:
@@ -223,6 +329,8 @@ def register(request: RegisterRequest):
 
 @app.post("/login")
 def login(request: LoginRequest):
+    if request.email.lower().strip() in {demo["email"] for demo in DEMO_USERS}:
+        seed_demo_users()
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == request.email.lower().strip()).first()
@@ -393,6 +501,7 @@ def user_dashboard(user: User = Depends(current_user)):
 
 @app.get("/admin/users", response_model=list[AdminUserResponse])
 def admin_users(user: User = Depends(staff_user)):
+    seed_demo_users()
     db = SessionLocal()
     try:
         users = db.query(User).filter(User.role == "user").order_by(User.created_at.desc()).all()
